@@ -1,0 +1,29 @@
+# Zig binaries / tarballs
+*.tar.xz
+*.tar.gz
+
+# Claude local config
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Env files
+.env
+*.env
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
