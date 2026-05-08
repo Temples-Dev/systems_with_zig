@@ -1,0 +1,148 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+
+  --color-background:           var(--background);
+  --color-foreground:           var(--foreground);
+  --color-card:                 var(--card);
+  --color-card-foreground:      var(--card-foreground);
+  --color-primary:              var(--primary);
+  --color-primary-foreground:   var(--primary-foreground);
+  --color-secondary:            var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted:                var(--muted);
+  --color-muted-foreground:     var(--muted-foreground);
+  --color-accent:               var(--accent);
+  --color-accent-foreground:    var(--accent-foreground);
+  --color-destructive:          var(--destructive);
+  --color-border:               var(--border);
+  --color-input:                var(--input);
+  --color-ring:                 var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ── Light mode ───────────────────────────────────────── */
+:root {
+  --radius: 0.5rem;
+
+  --background:           #ffffff;
+  --foreground:           #111111;
+  --card:                 #ffffff;
+  --card-foreground:      #111111;
+  --popover:              #ffffff;
+  --popover-foreground:   #111111;
+
+  --primary:              #F7A41D;
+  --primary-foreground:   #111111;
+
+  --secondary:            rgba(17, 17, 17, 0.05);
+  --secondary-foreground: #111111;
+
+  --muted:                rgba(17, 17, 17, 0.05);
+  --muted-foreground:     rgba(17, 17, 17, 0.45);
+
+  --accent:               #F7A41D;
+  --accent-foreground:    #111111;
+
+  --destructive:          #dc2626;
+
+  --border:               rgba(17, 17, 17, 0.14);
+  --input:                rgba(17, 17, 17, 0.14);
+  --ring:                 #F7A41D;
+}
+
+/* ── Dark mode ────────────────────────────────────────── */
+.dark {
+  --background:           #0d1117;
+  --foreground:           #e6edf3;
+  --card:                 #161b22;
+  --card-foreground:      #e6edf3;
+  --popover:              #161b22;
+  --popover-foreground:   #e6edf3;
+
+  --primary:              #F7A41D;
+  --primary-foreground:   #111111;
+
+  --secondary:            rgba(240, 246, 252, 0.06);
+  --secondary-foreground: #e6edf3;
+
+  --muted:                rgba(240, 246, 252, 0.06);
+  --muted-foreground:     #8b949e;
+
+  --accent:               #F7A41D;
+  --accent-foreground:    #111111;
+
+  --destructive:          #f85149;
+
+  --border:               #30363d;
+  --input:                #30363d;
+  --ring:                 #F7A41D;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    background-color: #f6f5f3;
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .dark body {
+    background-color: #0d1117;
+  }
+}
+
+/* ── hljs token colours (dark, matches zig-dark Monaco theme) ─────────────── */
+.hljs-block {
+  color: #e6edf3;
+}
+.hljs-block .hljs-keyword,
+.hljs-block .hljs-built_in {
+  color: #F7A41D;
+  font-weight: 600;
+}
+.hljs-block .hljs-string,
+.hljs-block .hljs-char {
+  color: #7ee787;
+}
+.hljs-block .hljs-number {
+  color: #ffa657;
+}
+.hljs-block .hljs-comment {
+  color: #6e7681;
+  font-style: italic;
+}
+.hljs-block .hljs-type {
+  color: #79c0ff;
+}
+.hljs-block .hljs-literal {
+  color: #ff7b72;
+}
+.hljs-block .hljs-symbol {
+  color: #d2a8ff;
+}
+.hljs-block .hljs-title,
+.hljs-block .hljs-function {
+  color: #d2a8ff;
+}
+/* non-zig languages (bash, shell, etc) */
+.hljs-block .hljs-meta { color: #8b949e; }
+.hljs-block .hljs-variable { color: #ffa657; }
+
+/* ── Thin scrollbars ──────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
