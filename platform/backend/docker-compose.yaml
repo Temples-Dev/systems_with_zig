@@ -27,12 +27,12 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
     restart: unless-stopped
     volumes:
-      - ./backend:/app
-      - ..:/content:ro
+      - .:/app
+      - ../..:/content:ro
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.dev
       DATABASE_URL: postgres://${POSTGRES_USER:-platform}:${POSTGRES_PASSWORD:-devpassword}@db:5432/${POSTGRES_DB:-systems_platform}

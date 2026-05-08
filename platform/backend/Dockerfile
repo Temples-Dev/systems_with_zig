@@ -18,7 +18,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN chmod +x entrypoint.sh
+RUN chmod +x entrypoint.sh \
+    && useradd -r -u 1001 -s /sbin/nologin appuser \
+    && chown -R appuser:appuser /app
+
+USER appuser
 
 EXPOSE 8000
 
