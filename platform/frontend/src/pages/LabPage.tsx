@@ -4,7 +4,7 @@ import {
   ArrowLeft, CheckCircle2, Clock, Code2, Edit2, Eye, FileText, FlaskConical,
   MonitorPlay, Play, TestTube2, XCircle,
 } from "lucide-react";
-import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
+import { PanelGroup, Panel, PanelResizeHandle } from "react-resizable-panels";
 import ReactMarkdown from "react-markdown";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -100,13 +100,10 @@ export default function LabPage() {
   const [runMode, setRunMode] = useState<"debug" | "test">("debug");
   const [isPending, setIsPending] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
-  // Mobile tab: "exercise" | "code" | "output"
   const [mobileTab, setMobileTab] = useState<"exercise" | "code" | "output">("code");
-  // Notes
   const [noteContent, setNoteContent] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
   const noteSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Admin inline editing
   const [editField, setEditField] = useState<"title" | "description" | "starter_code" | null>(null);
   const [editValue, setEditValue] = useState("");
 
@@ -121,7 +118,6 @@ export default function LabPage() {
     enabled: !!slug,
   });
 
-  // Load persisted pass status from backend
   const { data: passStatus } = useQuery<Record<string, boolean>>({
     queryKey: ["exercise-pass-status", slug],
     queryFn: () => api.get(`/progress/exercises/modules/${slug}/`).then((r) => r.data),
@@ -141,9 +137,7 @@ export default function LabPage() {
     setProjects((prev) => {
       const next = { ...prev };
       for (const ex of mod.exercises) {
-        if (!(ex.id in next)) {
-          next[ex.id] = makeProject(ex.title, ex.starter_code);
-        }
+        if (!(ex.id in next)) next[ex.id] = makeProject(ex.title, ex.starter_code);
       }
       return next;
     });
@@ -151,7 +145,6 @@ export default function LabPage() {
 
   const activeEx = mod?.exercises[selected];
 
-  // Notes — load when exercise changes
   useEffect(() => {
     if (!activeEx) return;
     setNoteContent("");
@@ -171,7 +164,6 @@ export default function LabPage() {
     saveNote(content);
   }
 
-  // Admin exercise editor
   const { mutate: saveExercise } = useMutation({
     mutationFn: ({ id, field, value }: { id: number; field: string; value: string }) =>
       api.patch(`/curriculum/exercises/${id}/`, { [field]: value }),
@@ -190,6 +182,7 @@ export default function LabPage() {
     if (!editField || !activeEx) return;
     saveExercise({ id: activeEx.id, field: editField, value: editValue });
   }
+
   const activeProject = activeEx ? (projects[activeEx.id] ?? []) : [];
   const activeSelectedFile = activeProject.find((f) => f.id === selectedFileId) ?? activeProject[0];
   const activeResult = activeEx ? results[activeEx.id] : null;
@@ -273,12 +266,11 @@ export default function LabPage() {
               if (runMode === "test") {
                 setPassed((p) => ({ ...p, [exId]: true }));
                 toast.success(`All tests passed in ${durationMs}ms`);
-                // Persist to backend
                 const code = project.find((f) => f.path === "src/main.zig")?.content ?? "";
                 api.post(`/progress/exercises/${exId}/pass/`, { code }).then(() => {
                   queryClient.invalidateQueries({ queryKey: ["stats"] });
                   queryClient.invalidateQueries({ queryKey: ["exercise-pass-status", slug] });
-                }).catch(() => {/* non-critical */});
+                }).catch(() => {});
               } else {
                 toast.success(`Built in ${durationMs}ms`);
               }
@@ -333,8 +325,241 @@ export default function LabPage() {
     );
   }
 
+  // ─── Shared panel contents ────────────────────────────────────────────────
+
+  const exerciseList = (
+    <div className="px-3 py-2.5 h-full overflow-y-auto">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-2 mb-2">
+        Exercises
+      </p>
+      <div className="space-y-0.5">
+        {mod.exercises.map((ex, idx) => {
+          const ExIcon = typeIcon[ex.exercise_type];
+          const res = results[ex.id];
+          const hasPassed = passed[ex.id];
+          return (
+            <button
+              key={ex.id}
+              onClick={() => { setSelected(idx); setSelectedFileId("main"); }}
+              className={[
+                "w-full flex items-center gap-2 px-2 py-2 rounded-lg text-left transition-colors",
+                selected === idx
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary",
+              ].join(" ")}
+            >
+              <ExIcon className="h-3.5 w-3.5 shrink-0" />
+              <span className="flex-1 min-w-0 truncate text-xs">{ex.title}</span>
+              {hasPassed
+                ? <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
+                : res && res.exit_code !== 0
+                  ? <XCircle className="h-3 w-3 text-destructive shrink-0" />
+                  : null}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const fileTreePanel = activeEx ? (
+    <FileTree
+      files={activeProject}
+      selectedId={activeSelectedFile?.id ?? null}
+      onSelect={setSelectedFileId}
+      onAdd={(path) => addFile(activeEx.id, path)}
+      onDelete={(id) => deleteFile(activeEx.id, id)}
+    />
+  ) : null;
+
+  const codePanel = (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-card shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex w-7 h-7 shrink-0 rounded-md bg-primary/10 items-center justify-center">
+            <Icon className="h-3.5 w-3.5 text-primary" />
+          </div>
+          {editField === "title" ? (
+            <input
+              autoFocus
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") setEditField(null); }}
+              className="text-sm font-semibold bg-secondary rounded px-1.5 py-0.5 outline-none border border-primary/40 min-w-0 flex-1"
+            />
+          ) : (
+            <p className="text-sm font-semibold text-foreground truncate">
+              {activeEx?.title ?? "Select an exercise"}
+            </p>
+          )}
+          {activeEx && passed[activeEx.id] && (
+            <Badge variant="success" className="text-[10px] shrink-0">Passed</Badge>
+          )}
+          {user?.is_staff && activeEx && editField !== "title" && (
+            <button onClick={() => startEdit("title", activeEx.title)} className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
+              <Edit2 className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => setNoteOpen((v) => !v)}
+            className={["p-1.5 rounded-md transition-colors", noteOpen ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-secondary"].join(" ")}
+            title="Notes"
+          >
+            <FileText className="h-3.5 w-3.5" />
+          </button>
+          <div className="flex rounded-md border border-border overflow-hidden">
+            <button
+              onClick={() => setRunMode("debug")}
+              className={["px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1", runMode === "debug" ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground hover:bg-secondary"].join(" ")}
+            >
+              <Play className="h-3 w-3" />
+              Run
+            </button>
+            <button
+              onClick={() => setRunMode("test")}
+              className={["px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1", runMode === "test" ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground hover:bg-secondary"].join(" ")}
+            >
+              <TestTube2 className="h-3 w-3" />
+              Test
+            </button>
+          </div>
+          <Button size="sm" className="gap-1.5 h-8 shrink-0" onClick={run} disabled={isPending || !activeEx}>
+            {runMode === "test" ? <TestTube2 className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5 fill-primary-foreground" />}
+            {isPending ? "Running…" : runMode === "test" ? "Test" : "Run"}
+          </Button>
+        </div>
+      </div>
+
+      {/* Description */}
+      {activeEx?.description && (
+        <div className="px-5 py-3 bg-secondary/30 border-b border-border shrink-0 max-h-32 overflow-y-auto prose prose-sm prose-neutral dark:prose-invert max-w-none text-sm leading-relaxed relative group">
+          {editField === "description" ? (
+            <div className="space-y-1.5">
+              <textarea
+                autoFocus
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                rows={4}
+                className="w-full text-xs bg-secondary rounded p-2 outline-none border border-primary/40 font-mono resize-none"
+              />
+              <div className="flex gap-1.5">
+                <button onClick={commitEdit} className="text-[10px] px-2 py-0.5 rounded bg-primary text-primary-foreground">Save</button>
+                <button onClick={() => setEditField(null)} className="text-[10px] px-2 py-0.5 rounded bg-secondary text-muted-foreground">Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <ReactMarkdown>{activeEx.description}</ReactMarkdown>
+              {user?.is_staff && (
+                <button
+                  onClick={() => startEdit("description", activeEx.description)}
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-all"
+                >
+                  <Edit2 className="h-3 w-3" />
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Notes */}
+      {noteOpen && (
+        <div className="px-4 py-2 border-b border-border bg-secondary/20 shrink-0">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Notes</p>
+          <textarea
+            value={noteContent}
+            onChange={(e) => handleNoteChange(e.target.value)}
+            placeholder="Personal notes for this exercise…"
+            rows={3}
+            className="w-full text-xs bg-card rounded-md border border-border p-2 outline-none focus:border-primary/40 resize-none text-foreground placeholder:text-muted-foreground"
+          />
+        </div>
+      )}
+
+      {/* Editor */}
+      <div className="flex-1 overflow-hidden">
+        {activeSelectedFile ? (
+          <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-muted-foreground animate-pulse">Loading editor…</div>}>
+            <CodeEditor
+              key={`${activeEx?.id}-${activeSelectedFile.id}-${theme}`}
+              value={activeSelectedFile.content}
+              onChange={(val) => activeEx && updateFile(activeEx.id, activeSelectedFile.id, val ?? "")}
+              darkMode={theme === "dark"}
+              stderr={activeResult?.stderr}
+              exitCode={activeResult?.exit_code}
+            />
+          </Suspense>
+        ) : (
+          <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+            Select a file to edit
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const outputPanel = (
+    <div className="flex flex-col h-full bg-card">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border shrink-0">
+        <div className="flex items-center gap-2">
+          {activeResult && activeResult.status !== "running" && (
+            activeSuccess
+              ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+              : <XCircle className="h-3.5 w-3.5 text-destructive" />
+          )}
+          <span className="text-xs font-semibold text-foreground">Output</span>
+        </div>
+        {activeResult && activeResult.status !== "running" && (
+          <div className="flex items-center gap-2">
+            <Badge variant={activeSuccess ? "success" : "error"} className="text-[10px]">
+              exit {activeResult.exit_code}
+            </Badge>
+            <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <Clock className="h-3 w-3" />
+              {activeResult.duration_ms}ms
+            </span>
+          </div>
+        )}
+      </div>
+      <div className="flex-1 overflow-auto p-4 font-mono text-xs leading-relaxed">
+        {!activeResult && !isPending && (
+          <p className="text-muted-foreground italic">
+            Run to see output.
+            <span className="block mt-1 text-[10px]">Ctrl+Enter to run</span>
+          </p>
+        )}
+        {isPending && !activeResult?.stdout && !activeResult?.stderr && (
+          <p className="text-muted-foreground animate-pulse">Building…</p>
+        )}
+        {activeResult?.stdout && (
+          <div className="mb-3">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">stdout</p>
+            <pre className="text-foreground whitespace-pre-wrap">{activeResult.stdout}</pre>
+          </div>
+        )}
+        {activeResult?.stderr && (
+          <div>
+            <p className={["text-[10px] font-bold uppercase mb-1", activeSuccess ? "text-muted-foreground" : "text-destructive"].join(" ")}>
+              {activeSuccess ? "output" : "stderr"}
+            </p>
+            <pre className={activeSuccess ? "text-foreground whitespace-pre-wrap" : "text-destructive whitespace-pre-wrap"}>
+              {activeResult.stderr}
+            </pre>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ─── Render ────────────────────────────────────────────────────────────────
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="border-b border-border bg-card shrink-0">
         <div className="px-5 py-3">
@@ -368,9 +593,7 @@ export default function LabPage() {
               onClick={() => setMobileTab(tab)}
               className={[
                 "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium border-b-2 transition-colors",
-                mobileTab === tab
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
+                mobileTab === tab ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground",
               ].join(" ")}
             >
               <TabIcon className="h-3.5 w-3.5" />
@@ -380,267 +603,54 @@ export default function LabPage() {
         })}
       </div>
 
-      <PanelGroup orientation="horizontal" className="flex-1 overflow-hidden">
+      {/* Mobile: single panel at a time, no PanelGroup */}
+      <div className="flex-1 overflow-hidden sm:hidden">
+        {mobileTab === "exercise" && exerciseList}
+        {mobileTab === "code" && codePanel}
+        {mobileTab === "output" && outputPanel}
+      </div>
+
+      {/* Desktop: PanelGroup — all panels always visible, no CSS hiding */}
+      <PanelGroup
+        direction="horizontal"
+        className="hidden sm:flex flex-1 overflow-hidden"
+      >
         {/* Exercise list */}
-        <Panel defaultSize={13} minSize={8} maxSize={22} className={["flex flex-col bg-card border-r border-border overflow-y-auto", mobileTab === "exercise" ? "flex" : "hidden sm:flex"].join(" ")}>
-          <div className="px-3 py-2.5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-2 mb-2">
-              Exercises
-            </p>
-            <div className="space-y-0.5">
-              {mod.exercises.map((ex, idx) => {
-                const ExIcon = typeIcon[ex.exercise_type];
-                const res = results[ex.id];
-                const hasPassed = passed[ex.id];
-                return (
-                  <button
-                    key={ex.id}
-                    onClick={() => { setSelected(idx); setSelectedFileId("main"); }}
-                    className={[
-                      "w-full flex items-center gap-2 px-2 py-2 rounded-lg text-left transition-colors",
-                      selected === idx
-                        ? "bg-primary/10 text-primary font-medium"
-                        : "text-muted-foreground hover:text-foreground hover:bg-secondary",
-                    ].join(" ")}
-                  >
-                    <ExIcon className="h-3.5 w-3.5 shrink-0" />
-                    <span className="flex-1 min-w-0 truncate text-xs">{ex.title}</span>
-                    {hasPassed
-                      ? <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
-                      : res && res.exit_code !== 0
-                        ? <XCircle className="h-3 w-3 text-destructive shrink-0" />
-                        : null}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+        <Panel defaultSize={14} minSize={8} maxSize={22} className="flex flex-col bg-card border-r border-border">
+          {exerciseList}
         </Panel>
 
-        <PanelResizeHandle className="w-1 bg-border hover:bg-primary/40 transition-colors cursor-col-resize hidden sm:block" />
+        <PanelResizeHandle className="w-1 bg-border hover:bg-primary/40 transition-colors cursor-col-resize" />
 
-        {/* File tree */}
-        <Panel defaultSize={10} minSize={7} maxSize={18} className="hidden lg:block">
-          {activeEx && (
-            <FileTree
-              files={activeProject}
-              selectedId={activeSelectedFile?.id ?? null}
-              onSelect={setSelectedFileId}
-              onAdd={(path) => addFile(activeEx.id, path)}
-              onDelete={(id) => deleteFile(activeEx.id, id)}
-            />
-          )}
+        {/* File tree — collapsible on smaller screens, open on lg+ */}
+        <Panel
+          defaultSize={11}
+          minSize={0}
+          collapsible
+          collapsedSize={0}
+          className="hidden lg:block border-r border-border"
+        >
+          {fileTreePanel}
         </Panel>
 
         <PanelResizeHandle className="w-1 bg-border hover:bg-primary/40 transition-colors cursor-col-resize hidden lg:block" />
 
-        {/* Editor column */}
-        <Panel defaultSize={47} minSize={25} className={["flex-col overflow-hidden border-l border-border", mobileTab === "code" ? "flex" : "hidden sm:flex"].join(" ")}>
-          {/* Exercise toolbar */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-card shrink-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="flex w-7 h-7 shrink-0 rounded-md bg-primary/10 items-center justify-center">
-                <Icon className="h-3.5 w-3.5 text-primary" />
-              </div>
-              {editField === "title" ? (
-                <input
-                  autoFocus
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  onBlur={commitEdit}
-                  onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") setEditField(null); }}
-                  className="text-sm font-semibold bg-secondary rounded px-1.5 py-0.5 outline-none border border-primary/40 min-w-0 flex-1"
-                />
-              ) : (
-                <p className="text-sm font-semibold text-foreground truncate">
-                  {activeEx?.title ?? "Select an exercise"}
-                </p>
-              )}
-              {activeEx && passed[activeEx.id] && (
-                <Badge variant="success" className="text-[10px] shrink-0">Passed</Badge>
-              )}
-              {user?.is_staff && activeEx && editField !== "title" && (
-                <button onClick={() => startEdit("title", activeEx.title)} className="text-muted-foreground hover:text-foreground transition-colors shrink-0" title="Edit title">
-                  <Edit2 className="h-3 w-3" />
-                </button>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                onClick={() => setNoteOpen((v) => !v)}
-                className={["p-1.5 rounded-md transition-colors", noteOpen ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-secondary"].join(" ")}
-                title="Notes"
-              >
-                <FileText className="h-3.5 w-3.5" />
-              </button>
-              {/* Run mode toggle */}
-              <div className="flex rounded-md border border-border overflow-hidden">
-                <button
-                  onClick={() => setRunMode("debug")}
-                  className={[
-                    "px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1",
-                    runMode === "debug"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-card text-muted-foreground hover:text-foreground hover:bg-secondary",
-                  ].join(" ")}
-                  title="Run program (Ctrl+Enter)"
-                >
-                  <Play className="h-3 w-3" />
-                  Run
-                </button>
-                <button
-                  onClick={() => setRunMode("test")}
-                  className={[
-                    "px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1",
-                    runMode === "test"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-card text-muted-foreground hover:text-foreground hover:bg-secondary",
-                  ].join(" ")}
-                  title="Run tests (Ctrl+Enter)"
-                >
-                  <TestTube2 className="h-3 w-3" />
-                  Test
-                </button>
-              </div>
-              <Button
-                size="sm" className="gap-1.5 h-8 shrink-0"
-                onClick={run}
-                disabled={isPending || !activeEx}
-              >
-                {runMode === "test"
-                  ? <TestTube2 className="h-3.5 w-3.5" />
-                  : <Play className="h-3.5 w-3.5 fill-primary-foreground" />}
-                {isPending ? "Running…" : runMode === "test" ? "Test" : "Run"}
-              </Button>
-            </div>
-          </div>
-
-          {/* Problem description */}
-          {activeEx?.description && (
-            <div className="px-5 py-3 bg-secondary/30 border-b border-border shrink-0 max-h-32 overflow-y-auto prose prose-sm prose-neutral dark:prose-invert max-w-none text-sm leading-relaxed relative group">
-              {editField === "description" ? (
-                <div className="space-y-1.5">
-                  <textarea
-                    autoFocus
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    rows={4}
-                    className="w-full text-xs bg-secondary rounded p-2 outline-none border border-primary/40 font-mono resize-none"
-                  />
-                  <div className="flex gap-1.5">
-                    <button onClick={commitEdit} className="text-[10px] px-2 py-0.5 rounded bg-primary text-primary-foreground">Save</button>
-                    <button onClick={() => setEditField(null)} className="text-[10px] px-2 py-0.5 rounded bg-secondary text-muted-foreground">Cancel</button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <ReactMarkdown>{activeEx.description}</ReactMarkdown>
-                  {user?.is_staff && (
-                    <button
-                      onClick={() => startEdit("description", activeEx.description)}
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-all"
-                      title="Edit description"
-                    >
-                      <Edit2 className="h-3 w-3" />
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Notes panel */}
-          {noteOpen && (
-            <div className="px-4 py-2 border-b border-border bg-secondary/20 shrink-0">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Notes</p>
-              <textarea
-                value={noteContent}
-                onChange={(e) => handleNoteChange(e.target.value)}
-                placeholder="Personal notes for this exercise…"
-                rows={3}
-                className="w-full text-xs bg-card rounded-md border border-border p-2 outline-none focus:border-primary/40 resize-none text-foreground placeholder:text-muted-foreground"
-              />
-            </div>
-          )}
-
-          {/* Monaco editor */}
-          <div className="flex-1 overflow-hidden">
-            {activeSelectedFile ? (
-              <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-muted-foreground animate-pulse">Loading editor…</div>}>
-                <CodeEditor
-                  key={`${activeEx?.id}-${activeSelectedFile.id}-${theme}`}
-                  value={activeSelectedFile.content}
-                  onChange={(val) =>
-                    activeEx && updateFile(activeEx.id, activeSelectedFile.id, val ?? "")
-                  }
-                  darkMode={theme === "dark"}
-                  stderr={activeResult?.stderr}
-                  exitCode={activeResult?.exit_code}
-                />
-              </Suspense>
-            ) : (
-              <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-                Select a file to edit
-              </div>
-            )}
-          </div>
+        {/* Editor */}
+        <Panel defaultSize={50} minSize={25} className="flex flex-col overflow-hidden">
+          {codePanel}
         </Panel>
 
         <PanelResizeHandle className="w-1 bg-border hover:bg-primary/40 transition-colors cursor-col-resize hidden xl:block" />
 
-        {/* Output panel */}
-        <Panel defaultSize={20} minSize={12} className={["flex-col bg-card border-l border-border", mobileTab === "output" ? "flex" : "hidden xl:flex"].join(" ")}>
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border shrink-0">
-            <div className="flex items-center gap-2">
-              {activeResult && activeResult.status !== "running" && (
-                activeSuccess
-                  ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                  : <XCircle className="h-3.5 w-3.5 text-destructive" />
-              )}
-              <span className="text-xs font-semibold text-foreground">Output</span>
-            </div>
-            {activeResult && activeResult.status !== "running" && (
-              <div className="flex items-center gap-2">
-                <Badge variant={activeSuccess ? "success" : "error"} className="text-[10px]">
-                  exit {activeResult.exit_code}
-                </Badge>
-                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                  <Clock className="h-3 w-3" />
-                  {activeResult.duration_ms}ms
-                </span>
-              </div>
-            )}
-          </div>
-          <div className="flex-1 overflow-auto p-4 font-mono text-xs leading-relaxed">
-            {!activeResult && !isPending && (
-              <p className="text-muted-foreground italic">
-                Run to see output.
-                <span className="block mt-1 text-[10px]">Ctrl+Enter to run</span>
-              </p>
-            )}
-            {isPending && !activeResult?.stdout && !activeResult?.stderr && (
-              <p className="text-muted-foreground animate-pulse">Building…</p>
-            )}
-            {activeResult?.stdout && (
-              <div className="mb-3">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">stdout</p>
-                <pre className="text-foreground whitespace-pre-wrap">{activeResult.stdout}</pre>
-              </div>
-            )}
-            {activeResult?.stderr && (
-              <div>
-                <p className={[
-                  "text-[10px] font-bold uppercase mb-1",
-                  activeSuccess ? "text-muted-foreground" : "text-destructive",
-                ].join(" ")}>
-                  {activeSuccess ? "output" : "stderr"}
-                </p>
-                <pre className={activeSuccess ? "text-foreground whitespace-pre-wrap" : "text-destructive whitespace-pre-wrap"}>
-                  {activeResult.stderr}
-                </pre>
-              </div>
-            )}
-          </div>
+        {/* Output */}
+        <Panel
+          defaultSize={25}
+          minSize={0}
+          collapsible
+          collapsedSize={0}
+          className="hidden xl:flex flex-col border-l border-border"
+        >
+          {outputPanel}
         </Panel>
       </PanelGroup>
     </div>

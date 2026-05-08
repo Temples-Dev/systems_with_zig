@@ -199,7 +199,7 @@ export default function AppLayout() {
         </div>
 
         {/* Page content — scrollable by default; full-screen pages use h-full internally */}
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto min-h-0">
           <Outlet />
         </main>
       </div>
