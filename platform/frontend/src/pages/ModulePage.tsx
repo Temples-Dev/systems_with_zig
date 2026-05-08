@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Code2, Eye, FlaskConical } from "lucide-react";
+import { ArrowLeft, BookOpen, Code2, Eye, ExternalLink, FileText, FlaskConical, Library, Play, PlaySquare } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -38,6 +38,19 @@ interface Module {
 }
 
 const exerciseIcon = { implementation: Code2, observation: Eye, analysis: FlaskConical };
+
+const RESOURCE_TYPE_ICON: Record<string, React.ElementType> = {
+  video: Play, playlist: PlaySquare, article: FileText, docs: BookOpen,
+};
+
+interface Resource {
+  id: number;
+  title: string;
+  url: string;
+  description: string;
+  resource_type: string;
+  topic: string;
+}
 
 function slugify(text: string) {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
@@ -105,6 +118,12 @@ export default function ModulePage() {
       setChecked(mapped);
     }
   }, [objStatus]);
+
+  const { data: moduleResources = [] } = useQuery<Resource[]>({
+    queryKey: ["module-resources", mod?.id],
+    queryFn: () => api.get(`/resources/?module=${mod!.id}`).then((r) => r.data.results ?? r.data),
+    enabled: !!mod?.id,
+  });
 
   const { mutate: startModule } = useMutation({
     mutationFn: (s: string) => api.post(`/progress/modules/${s}/`, { state: "in_progress" }),
@@ -384,6 +403,42 @@ export default function ModulePage() {
                           </Button>
                         </div>
                       </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+            {/* Further reading */}
+            {moduleResources.length > 0 && (
+              <section className="mt-10 pt-8 border-t border-border">
+                <h2 className="text-xl font-bold text-foreground mb-1 flex items-center gap-2">
+                  <Library className="h-5 w-5 text-primary" />
+                  Further Reading
+                </h2>
+                <p className="text-xs text-muted-foreground mb-5">Curated resources to reinforce this module.</p>
+                <div className="space-y-2">
+                  {moduleResources.map((res) => {
+                    const Icon = RESOURCE_TYPE_ICON[res.resource_type] ?? FileText;
+                    return (
+                      <a
+                        key={res.id}
+                        href={res.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 hover:border-primary/30 transition-colors no-underline group"
+                      >
+                        <div className="flex w-7 h-7 rounded-md bg-primary/10 shrink-0 items-center justify-center mt-0.5">
+                          <Icon className="h-3.5 w-3.5 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors truncate">{res.title}</p>
+                          {res.description && (
+                            <p className="text-xs text-muted-foreground leading-snug mt-0.5 line-clamp-1">{res.description}</p>
+                          )}
+                          <span className="text-[10px] bg-secondary text-muted-foreground px-2 py-0.5 rounded-full capitalize inline-block mt-1.5">{res.topic}</span>
+                        </div>
+                        <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5 group-hover:text-primary transition-colors" />
+                      </a>
                     );
                   })}
                 </div>

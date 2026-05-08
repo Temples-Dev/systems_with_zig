@@ -9,6 +9,7 @@ import ModulePage from "@/pages/ModulePage";
 import PlaygroundPage from "@/pages/PlaygroundPage";
 import ProfilePage from "@/pages/ProfilePage";
 import RegisterPage from "@/pages/RegisterPage";
+import ResourcesPage from "@/pages/ResourcesPage";
 import SharePage from "@/pages/SharePage";
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/share/:slug" element={<SharePage />} />
         <Route path="/labs" element={<LabsPage />} />
         <Route path="/labs/:slug" element={<LabPage />} />
+        <Route path="/resources" element={<ResourcesPage />} />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>
 

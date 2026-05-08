@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Navigate, Outlet } from "react-router-dom";
 import {
   BookOpen, FlaskConical, LayoutDashboard,
-  LogOut, Menu, Moon, Search, Sun, Terminal, User, X, Zap,
+  Library, LogOut, Menu, Moon, Search, Sun, Terminal, User, X, Zap,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -114,6 +114,7 @@ export default function AppLayout() {
         <NavItem to="/curriculum" icon={BookOpen} label="Curriculum" />
         <NavItem to="/playground" icon={Terminal} label="Playground" />
         <NavItem to="/labs" icon={FlaskConical} label="Labs" />
+        <NavItem to="/resources" icon={Library} label="Resources" />
         <div className="mt-2 pt-2 border-t border-border">
           <NavItem to="/profile" icon={User} label="Profile" />
         </div>
